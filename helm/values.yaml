@@ -1,6 +1,3 @@
-# values.yaml - Configuración para Punto Vuela Citas
-
-# Número de réplicas solicitado para alta disponibilidad
 replicaCount: 2
 
 # Configuración del Backend
