@@ -39,12 +39,12 @@ spec:
           # Dirección para la comunicación interna de sincronización entre pods.
           - "-raft-addr"
           - "$(POD_IP):4002"
-          # Directorio donde se guardará el archivo de base de datos replicado.
-          - "/data"
           - "-disco-mode"
           - "dns"
           - "-disco-config"
           - '{"name":"{{ .Values.database.name }}-headless"}'
+          # Directorio donde se guardará el archivo de base de datos replicado.
+          - "/data"
           
         # 
         # obtenemos el nombre real del Pod (vuela-db-0, vuela-db-1) y se lo damos a rqlite.
