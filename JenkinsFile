@@ -21,9 +21,6 @@ pipeline {
         stage('Preparación') {
             steps {
                 echo "Iniciando despliegue de Punto Vuela Citas para ${DOMAIN}..."
-                // Limpieza opcional del espacio de trabajo
-                cleanWs()
-                checkout scm
             }
         }
 
