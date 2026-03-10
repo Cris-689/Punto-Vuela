@@ -341,6 +341,6 @@ app.get('/api/status', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Servidor backend distribuido y protegido corriendo en el puerto ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor backend corriendo en el puerto ${PORT}`);
 });

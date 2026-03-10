@@ -52,14 +52,7 @@ spec:
                   key: jwt-secret
             - name: DB_URL
               value: "http://{{ .Values.database.name }}-service:4001"
-            
-            # Secreto JWT inyectado desde el secreto creado con kubectl
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: vuela-secrets
-                  key: jwt-secret
-          
+
           # Comprueba que el contenedor se a levantado
           livenessProbe:
             httpGet:
