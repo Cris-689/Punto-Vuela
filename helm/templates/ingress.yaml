@@ -3,10 +3,13 @@ kind: Ingress
 metadata:
   name: vuela-ingress
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    # Redirección automática a HTTPS para seguridad
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Cambiado a public para coincidir con la clase de MicroK8s
+    kubernetes.io/ingress.class: "public"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Si aún no tienes certificados SSL, pon esto en "false" para probar por HTTP
+    nginx.ingress.kubernetes.io/ssl-redirect: "true" 
 spec:
+  ingressClassName: public
   tls:
   - hosts:
     - {{ .Values.ingress.host }}
@@ -15,7 +18,6 @@ spec:
   - host: {{ .Values.ingress.host }}
     http:
       paths:
-      # Las peticiones que empiezan por /api van al backend
       - path: /api
         pathType: Prefix
         backend:
@@ -23,7 +25,6 @@ spec:
             name: {{ .Values.backend.name }}-service
             port:
               number: 80
-      # El resto de peticiones van al frontend de React
       - path: /
         pathType: Prefix
         backend:
