@@ -44,7 +44,7 @@ spec:
           - "-disco-config"
           - '{"name":"{{ .Values.database.name }}-headless"}'
           # Directorio donde se guardará el archivo de base de datos replicado.
-          - "-data-path"
+          - "-data-dir"
           - "/data"
           
         # 
