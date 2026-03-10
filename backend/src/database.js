@@ -1,4 +1,4 @@
-const { rqlite } = require('rqlite-js');
+const rqlite = require('rqlite-js');
 
 // Se utiliza la URL del servicio de Kubernetes o una por defecto para desarrollo local
 const dbUrl = process.env.DB_URL;
