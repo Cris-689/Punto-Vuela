@@ -1,8 +1,8 @@
-const { rqlite } = require('rqlite-js');
+const { DataApiClient } = require('rqlite-js');
 
 // Se utiliza la URL del servicio de Kubernetes o una por defecto para desarrollo local
 const dbUrl = process.env.DB_URL;
-const client = new rqlite(dbUrl);
+const client = new DataApiClient(dbUrl);
 
 const initDb = async () => {
     try {
