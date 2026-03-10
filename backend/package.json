@@ -15,8 +15,8 @@
     "cors": "^2.8.6",
     "date-fns": "^4.1.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.1.x",
     "jsonwebtoken": "^9.0.3",
-    "rqlite-js": "^3.1.0",
-    "express-rate-limit": "^7.1.x"
+    "rqlite-js": "^2.5.7"
   }
 }
