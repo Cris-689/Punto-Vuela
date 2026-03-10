@@ -83,7 +83,7 @@ spec:
                         --set backend.image=${REGISTRY}/vuela-backend \
                         --set backend.tag=${env.BUILD_ID} \
                         --set frontend.image=${REGISTRY}/vuela-frontend \
-                        --set frontend.tag=${env.BUILD_ID}
+                        --set frontend.tag=${env.BUILD_ID} \
                         --wait --timeout 5m
                     """
                 }
