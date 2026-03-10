@@ -35,10 +35,10 @@ spec:
           - "$(POD_NAME)"
           # Dirección donde el Backend enviará las consultas SQL.
           - "-http-addr"
-          - "0.0.0.0:4001"
+          - "$(POD_IP):4001"
           # Dirección para la comunicación interna de sincronización entre pods.
           - "-raft-addr"
-          - "0.0.0.0:4002"
+          - "$(POD_IP):4002"
           # Directorio donde se guardará el archivo de base de datos replicado.
           - "/data"
           - "-disco-mode"
@@ -53,6 +53,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
               
         # 4001 para la API (Backend) y 4002 para el consenso (Raft).
         ports:
