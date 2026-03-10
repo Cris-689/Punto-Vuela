@@ -1,0 +1,90 @@
+pipeline {
+    agent any
+
+    environment {
+        // Configuración global del proyecto
+        REGISTRY = "uzbuzbiz" // Cambia por tu usuario de Docker Hub
+        DOMAIN = "uzbuzbiz.es"
+        
+        // Nombres de las imágenes alineados con Helm
+        BACKEND_IMAGE = "${REGISTRY}/vuela-backend"
+        FRONTEND_IMAGE = "${REGISTRY}/vuela-frontend"
+        
+        // Activamos BuildKit para optimizar cache de npm
+        DOCKER_BUILDKIT = '1'
+
+        // Puerto que usara la api
+        APP_PORT = '3000'
+    }
+
+    stages {
+        stage('Preparación') {
+            steps {
+                echo "Iniciando despliegue de Punto Vuela Citas para ${DOMAIN}..."
+                // Limpieza opcional del espacio de trabajo
+                cleanWs()
+                checkout scm
+            }
+        }
+
+        stage('Build & Push Backend') {
+            steps {
+                script {
+                    echo "Construyendo Backend con BuildKit..."
+                    // puerto según el código del servidor
+                    sh """
+                    docker build \
+                        --build-arg APP_PORT=${APP_PORT}} \
+                        -t ${BACKEND_IMAGE}:${BUILD_NUMBER} \
+                        -t ${BACKEND_IMAGE}:latest \
+                        ./backend
+                    """
+                    sh "docker push ${BACKEND_IMAGE}:${BUILD_NUMBER}"
+                    sh "docker push ${BACKEND_IMAGE}:latest"
+                }
+            }
+        }
+
+        stage('Build & Push Frontend') {
+            steps {
+                script {
+                    echo "Construyendo Frontend con BuildKit..."
+                    // Inyectamos la URL de la API para que React sepa dónde conectar
+                    sh """
+                    docker build \
+                        --build-arg API_URL=https://${DOMAIN}/api \
+                        -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} \
+                        -t ${FRONTEND_IMAGE}:latest \
+                        ./frontend
+                    """
+                    sh "docker push ${FRONTEND_IMAGE}:${BUILD_NUMBER}"
+                    sh "docker push ${FRONTEND_IMAGE}:latest"
+                }
+            }
+        }
+
+        stage('Despliegue con Helm') {
+            steps {
+                script {
+                    echo "Actualizando clúster Kubernetes con Helm..."
+                    // Usamos los valores del chart y actualizamos las tags de imagen
+                    sh """
+                    helm upgrade --install punto-vuela ./helm \
+                        --set backend.tag=${BUILD_NUMBER} \
+                        --set frontend.tag=${BUILD_NUMBER} \
+                        --set replicaCount=2
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Despliegue completado con éxito en https://${DOMAIN}"
+        }
+        failure {
+            echo "Error en el pipeline. Revisa los logs de Jenkins."
+        }
+    }
+}

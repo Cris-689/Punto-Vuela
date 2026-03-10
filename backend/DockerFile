@@ -1,0 +1,18 @@
+FROM node:20-slim
+
+# Instalamos dependencias necesarias para rqlite-js si las hubiera
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install --production
+
+COPY . .
+
+# Cambiamos la propiedad de los archivos al usuario 'node' (incluido en la imagen oficial)
+RUN chown -R node:node /app
+
+# Usamos un usuario no privilegiado para la ejecución
+USER node
+
+EXPOSE 3000
+CMD ["node", "src/server.js"]

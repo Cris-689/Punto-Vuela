@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vuela-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Redirección automática a HTTPS para seguridad
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - {{ .Values.ingress.host }}
+    secretName: {{ .Values.ingress.tlsSecret }}
+  rules:
+  - host: {{ .Values.ingress.host }}
+    http:
+      paths:
+      # Las peticiones que empiezan por /api van al backend
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.backend.name }}-service
+            port:
+              number: 80
+      # El resto de peticiones van al frontend de React
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.frontend.name }}-service
+            port:
+              number: 80

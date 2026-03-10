@@ -1,0 +1,58 @@
+# values.yaml - Configuración para Punto Vuela Citas
+
+# Número de réplicas solicitado para alta disponibilidad
+replicaCount: 2
+
+# Configuración del Backend
+backend:
+  name: "vuela-api"
+  image: "tu-registro/vuela-backend"
+  tag: "latest" # Jenkins sobreescribirá esto en el deploy
+  port: 3000
+  dbHost: "vuela-db-service"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+# Configuración del Frontend
+frontend:
+  name: "vuela-web"
+  image: "tu-registro/vuela-frontend"
+  tag: "latest" # Jenkins sobreescribirá esto en el deploy
+  port: 80
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+# Configuracion de la base de datos
+database:
+  name: "vuela-db"
+  replicas: 2
+  image: "rqlite/rqlite:latest"
+  port: 4001 # Puerto de la API de rqlite
+  raftPort: 4002 # Puerto para la comunicación entre nodos rqlite
+  storageSize: 2Gi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 512Mi
+# Persistencia para la base de datos SQLite
+persistence:
+  size: 1Gi
+  # SQLite con 2 réplicas requiere un volumen ReadWriteMany (RWX)
+  accessMode: ReadWriteMany
+
+# Configuración del dominio y certificado
+ingress:
+  enabled: true
+  host: "uzbuzbiz.es"
+  tlsSecret: "vuela-cert-tls" # El nombre del secreto creado con kubectl

@@ -1,0 +1,91 @@
+# templates/backend.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.backend.name }}
+  labels:
+    app: {{ .Values.backend.name }}
+spec:
+  # 2 réplicas para alta disponibilidad
+  replicas: {{ .Values.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      app: {{ .Values.backend.name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.backend.name }}
+    spec:
+      serviceAccountName: {{ .Values.backend.name }}-sa
+      containers:
+        - name: backend
+          # Imagen que se actualizará desde Jenkins
+          image: "{{ .Values.backend.image }}:{{ .Values.backend.tag }}"
+          imagePullPolicy: IfNotPresent
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          ports:
+            - containerPort: 3000
+              name: http
+          
+          env:
+            - name: ADMIN_DNI
+              valueFrom:
+                secretKeyRef:
+                  name: vuela-secrets
+                  key: admin-dni
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vuela-secrets
+                  key: admin-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: vuela-secrets
+                  key: jwt-secret
+            - name: DB_URL
+              value: "http://{{ .Values.database.name }}-service:4001"
+            
+            # Secreto JWT inyectado desde el secreto creado con kubectl
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: vuela-secrets
+                  key: jwt-secret
+          
+          # Comprueba que el contenedor se a levantado
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          # Comprueba si el contenedor puede recibir trafico
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.backend.name }}-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Values.backend.name }}

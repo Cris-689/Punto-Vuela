@@ -1,0 +1,6 @@
+apiVersion: v2
+name: punto-vuela-citas
+description: Gestión de citas para Punto Vuela
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

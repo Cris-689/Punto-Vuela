@@ -1,0 +1,6 @@
+
+> backend@1.0.0 start
+> node src/server.js
+
+Servidor backend corriendo en http://localhost:3000
+Conectado a la base de datos SQLite.
