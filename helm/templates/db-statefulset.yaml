@@ -26,6 +26,7 @@ spec:
       containers:
       - name: rqlite
         image: {{ .Values.database.image }}
+        command: ["rqlited"]
         resources:
             {{- toYaml .Values.database.resources | nindent 12 }}
         # Configurar rqlite para trabajar en red y persistir datos.
