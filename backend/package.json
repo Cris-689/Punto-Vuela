@@ -17,5 +17,6 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "rqlite-js": "^2.1.0"
+    "express-rate-limit": "^7.1.x",
   }
 }
