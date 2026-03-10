@@ -6,7 +6,7 @@ replicaCount: 2
 # Configuración del Backend
 backend:
   name: "vuela-api"
-  image: "tu-registro/vuela-backend"
+  image: "uzbuzbiz/vuela-backend"
   tag: "latest" # Jenkins sobreescribirá esto en el deploy
   port: 3000
   dbHost: "vuela-db-service"
@@ -20,7 +20,7 @@ backend:
 # Configuración del Frontend
 frontend:
   name: "vuela-web"
-  image: "tu-registro/vuela-frontend"
+  image: "uzbuzbiz/vuela-frontend"
   tag: "latest" # Jenkins sobreescribirá esto en el deploy
   port: 80
   resources:
@@ -49,7 +49,7 @@ database:
 persistence:
   size: 1Gi
   # SQLite con 2 réplicas requiere un volumen ReadWriteMany (RWX)
-  accessMode: ReadWriteMany
+  accessMode: ReadWriteOnce
 
 # Configuración del dominio y certificado
 ingress:

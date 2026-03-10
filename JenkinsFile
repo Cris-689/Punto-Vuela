@@ -34,7 +34,7 @@ pipeline {
                     // puerto según el código del servidor
                     sh """
                     docker build \
-                        --build-arg APP_PORT=${APP_PORT}} \
+                        --build-arg APP_PORT=${APP_PORT} \
                         -t ${BACKEND_IMAGE}:${BUILD_NUMBER} \
                         -t ${BACKEND_IMAGE}:latest \
                         ./backend

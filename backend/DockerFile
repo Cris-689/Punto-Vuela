@@ -3,10 +3,10 @@ FROM node:20-slim
 # Instalamos dependencias necesarias para rqlite-js si las hubiera
 WORKDIR /app
 
-COPY package*.json ./
+COPY backend/package*.json ./
 RUN npm install --production
 
-COPY . .
+COPY backend/ .
 
 # Cambiamos la propiedad de los archivos al usuario 'node' (incluido en la imagen oficial)
 RUN chown -R node:node /app
