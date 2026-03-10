@@ -1,87 +1,76 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command: ["/busybox/cat"]
+    tty: true
+    volumeMounts:
+      - name: docker-config
+        mountPath: /kaniko/.docker
+  - name: helm
+    image: alpine/helm:latest
+    command: ["/bin/sh", "-c"]
+    args: ["tail -f /dev/null"]
+  volumes:
+    - name: docker-config
+      configMap:
+        name: docker-config
+'''
+        }
+    }
 
     environment {
-        // Configuración global del proyecto
-        REGISTRY = "uzbuzbiz" // Cambia por tu usuario de Docker Hub
+        REGISTRY = "localhost:32000" // Registro interno de MicroK8s
         DOMAIN = "uzbuzbiz.es"
-        
-        // Nombres de las imágenes alineados con Helm
-        BACKEND_IMAGE = "${REGISTRY}/vuela-backend"
-        FRONTEND_IMAGE = "${REGISTRY}/vuela-frontend"
-        
-        // Activamos BuildKit para optimizar cache de npm
-        DOCKER_BUILDKIT = '1'
-
-        // Puerto que usara la api
-        APP_PORT = '3000'
+        NAMESPACE = "punto-vuela"
     }
 
     stages {
-        stage('Preparación') {
+        stage('Build Backend con Kaniko') {
             steps {
-                echo "Iniciando despliegue de Punto Vuela Citas para ${DOMAIN}..."
-            }
-        }
-
-        stage('Build & Push Backend') {
-            steps {
-                script {
-                    echo "Construyendo Backend con BuildKit..."
-                    // puerto según el código del servidor
-                    sh """
-                    docker build \
-                        --build-arg APP_PORT=${APP_PORT} \
-                        -t ${BACKEND_IMAGE}:${BUILD_NUMBER} \
-                        -t ${BACKEND_IMAGE}:latest \
-                        ./backend
-                    """
-                    sh "docker push ${BACKEND_IMAGE}:${BUILD_NUMBER}"
-                    sh "docker push ${BACKEND_IMAGE}:latest"
+                container('kaniko') {
+                    script {
+                        sh """
+                        /kaniko/executor --context ${WORKSPACE} \
+                            --dockerfile ${WORKSPACE}/backend/Dockerfile \
+                            --destination ${REGISTRY}/vuela-backend:latest \
+                            --destination ${REGISTRY}/vuela-backend:${BUILD_ID}
+                        """
+                    }
                 }
             }
         }
 
-        stage('Build & Push Frontend') {
+        stage('Build Frontend con Kaniko') {
             steps {
-                script {
-                    echo "Construyendo Frontend con BuildKit..."
-                    // Inyectamos la URL de la API para que React sepa dónde conectar
+                container('kaniko') {
                     sh """
-                    docker build \
-                        --build-arg API_URL=https://${DOMAIN}/api \
-                        -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} \
-                        -t ${FRONTEND_IMAGE}:latest \
-                        ./frontend
+                    /kaniko/executor --context ${WORKSPACE} \
+                        --dockerfile ${WORKSPACE}/frontend/Dockerfile \
+                        --destination ${REGISTRY}/vuela-frontend:latest \
+                        --destination ${REGISTRY}/vuela-frontend:${BUILD_ID}
                     """
-                    sh "docker push ${FRONTEND_IMAGE}:${BUILD_NUMBER}"
-                    sh "docker push ${FRONTEND_IMAGE}:latest"
                 }
             }
         }
 
-        stage('Despliegue con Helm') {
+        stage('Deploy con Helm') {
             steps {
-                script {
-                    echo "Actualizando clúster Kubernetes con Helm..."
-                    // Usamos los valores del chart y actualizamos las tags de imagen
+                container('helm') {
                     sh """
                     helm upgrade --install punto-vuela ./helm \
-                        --set backend.tag=${BUILD_NUMBER} \
-                        --set frontend.tag=${BUILD_NUMBER} \
-                        --set replicaCount=2
+                        --namespace ${env.NAMESPACE} --create-namespace \
+                        --set backend.tag=${env.BUILD_ID} \
+                        --set frontend.tag=${env.BUILD_ID}
                     """
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            echo "Despliegue completado con éxito en https://${DOMAIN}"
-        }
-        failure {
-            echo "Error en el pipeline. Revisa los logs de Jenkins."
         }
     }
 }
