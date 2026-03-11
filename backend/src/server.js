@@ -24,6 +24,7 @@ const loginLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
@@ -43,7 +44,7 @@ const authenticateToken = (req, res, next) => {
 
 // Helper function to validate DNI format and mathematical correctness
 const validateDni = (dni) => {    
-    const validChars = 'TRWAGMYFPDXBNJZSQVHLCKET';
+    const validChars = 'TRWAGMYFPDXBNJZSQVHLCKE';
     const dniRegex = /^[0-9]{8}[TRWAGMYFPDXBNJZSQVHLCKET]$/i;
 
     if (!dniRegex.test(dni)) return false;
@@ -148,6 +149,13 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     const { date, time } = req.body;
     const userId = req.user.id;
     const isOwnerAdmin = req.user.dni === 'admin';
+
+    // --- AÑADE ESTOS LOGS AQUÍ ---
+    console.log(`--- Intento de cita ---`);
+    console.log(`Usuario: ${req.user.dni} (ID: ${userId})`);
+    console.log(`Fecha recibida: "${date}"`);
+    console.log(`Hora recibida: "${time}"`);
+    // -----------------------------
 
     if (!date || !time) {
         return res.status(400).json({ error: 'Fecha y hora son requeridas' });
@@ -332,12 +340,12 @@ app.delete('/api/admin/users', authenticateToken, async (req, res) => {
 });
 
 // Endpoint de Salud para Kubernetes (Liveness/Readiness)
-app.get('/api/status', async (req, res) => {
+app.get('/api/health', async (req, res) => {
     try {
         await db.query('SELECT 1');
-        res.json({ status: 'available' });
+        res.json({ status: 'ok', database: 'connected' });
     } catch (error) {
-        res.status(503).json({ status: 'unavailable' });
+        res.status(503).json({ status: 'error', database: 'disconnected' });
     }
 });
 
