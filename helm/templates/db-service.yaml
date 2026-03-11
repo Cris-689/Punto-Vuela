@@ -4,7 +4,7 @@ metadata:
   name: {{ .Values.database.name }}-service
 spec:
   # ClusterIP porque solo queremos acceso interno
-  type: ClusterIP
+  clusterIP: None
   ports:
     - port: 4001
       targetPort: 4001

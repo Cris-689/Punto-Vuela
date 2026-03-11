@@ -12,7 +12,7 @@ spec:
   serviceName: {{ .Values.database.name }}-headless
   
   # Definimos las 2 réplicas para garantizar la disponibilidad.
-  replicas: {{ .Values.database.replicas | default 2 }}
+  replicas: 3
   
   selector:
     matchLabels:
@@ -46,7 +46,8 @@ spec:
           - '{"name":"{{ .Values.database.name }}-headless"}'
           # Directorio donde se guardará el archivo de base de datos replicado.
           - "-bootstrap-expect"
-          - "{{ .Values.database.replicas | default 2 }}"
+          - "3"
+          - "-data"
           - "/data"
           
         # 
