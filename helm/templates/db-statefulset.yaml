@@ -45,8 +45,7 @@ spec:
           - "-disco-config"
           - '{"name":"{{ .Values.database.name }}-headless"}'
           # Directorio donde se guardará el archivo de base de datos replicado.
-          - "-bootstrap-expect"
-          - "3"
+          - "-bootstrap-expect=3"
           - "/data"
           
         # 
