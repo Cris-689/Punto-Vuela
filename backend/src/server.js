@@ -166,14 +166,22 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     // Función auxiliar para insertar la cita adaptada a rqlite
     const insertAppointment = async () => {
         try {
-            // Verificar disponibilidad en el clúster
+            // Verificamos disponibilidad
             const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
-            if (checkRes.get(0)) return res.status(400).json({ error: 'Este hueco ya está ocupado' });
+            
+            // DEBUG
+            console.log("Resultado búsqueda cita:", JSON.stringify(checkRes.toArray()));
 
-            // Insertar cita persistente
+            // Comprobar si el array tiene elementos
+            if (checkRes.toArray().length > 0) {
+                return res.status(400).json({ error: 'Este hueco ya está ocupado' });
+            }
+
+            // Insertar cita
             const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
             res.status(201).json({ id: insertRes.last_insert_id(), date, time });
         } catch (error) {
+            console.error("Error en DB:", error);
             res.status(500).json({ error: 'Error al crear la cita' });
         }
     };
