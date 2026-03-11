@@ -45,7 +45,7 @@ const authenticateToken = (req, res, next) => {
 // Helper function to validate DNI format and mathematical correctness
 const validateDni = (dni) => {    
     const validChars = 'TRWAGMYFPDXBNJZSQVHLCKE';
-    const dniRegex = /^[0-9]{8}[TRWAGMYFPDXBNJZSQVHLCKET]$/i;
+    const dniRegex = /^[0-9]{8}[TRWAGMYFPDXBNJZSQVHLCKE]$/i;
 
     if (!dniRegex.test(dni)) return false;
 
@@ -166,22 +166,24 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     // Función auxiliar para insertar la cita adaptada a rqlite
     const insertAppointment = async () => {
         try {
-            // Verificamos disponibilidad
             const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
-            
-            // DEBUG
-            console.log("Resultado búsqueda cita:", JSON.stringify(checkRes.toArray()));
+            const rows = checkRes.toArray();
 
-            // Comprobar si el array tiene elementos
-            if (checkRes.toArray().length > 0) {
+            // 1. Verificamos si la base de datos devolvió un error interno
+            if (rows.length > 0 && rows[0].error) {
+                console.error("Error interno de rqlite:", rows[0].error);
+                return res.status(500).json({ error: 'Error de comunicación con la base de datos' });
+            }
+
+            // 2. Ahora sí, verificamos si hay una cita real
+            if (rows.length > 0) {
                 return res.status(400).json({ error: 'Este hueco ya está ocupado' });
             }
 
-            // Insertar cita
             const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
             res.status(201).json({ id: insertRes.last_insert_id(), date, time });
         } catch (error) {
-            console.error("Error en DB:", error);
+            console.error("Fallo crítico en el servidor:", error);
             res.status(500).json({ error: 'Error al crear la cita' });
         }
     };
