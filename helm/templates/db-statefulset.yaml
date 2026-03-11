@@ -47,7 +47,6 @@ spec:
           # Directorio donde se guardará el archivo de base de datos replicado.
           - "-bootstrap-expect"
           - "3"
-          - "-data"
           - "/data"
           
         # 
