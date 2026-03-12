@@ -109,8 +109,16 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
     try {
         const results = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
-        const usersData = parseRqliteRows(results.get(0));
-        const user = usersData[0]; // Ahora sí es la fila real
+        const queryResult = results.get(0);
+        
+        // Transformar la fila de rqlite a un objeto JavaScript utilizable
+        let user = null;
+        if (queryResult && queryResult.values && queryResult.values.length > 0) {
+            user = {};
+            queryResult.columns.forEach((col, index) => {
+                user[col] = queryResult.values[0][index];
+            });
+        }
 
         if (!user || !(await bcrypt.compare(support_number, user.support_number))) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -119,6 +127,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         const token = jwt.sign({ id: user.id, dni: user.dni }, JWT_SECRET, { expiresIn: '2h' });
         res.json({ token, user: { id: user.id, dni: user.dni } });
     } catch (error) {
+        console.error("Error en el login:", error);
         res.status(500).json({ error: 'Error interno en el login' });
     }
 });
@@ -264,7 +273,7 @@ app.put('/api/admin/status', authenticateToken, async (req, res) => {
 // Admin: Obtener todas las citas y todos los usuarios asociados - Join distribuido
 app.get('/api/admin/appointments', authenticateToken, async (req, res) => {
     if (req.user.dni !== 'admin') {
-        return res.status(403).json({ error: 'Acceso denegado. Se requiere cuenta de administrador.' });
+        return res.status(403).json({ error: 'Acceso denegado.' });
     }
 
     try {
@@ -274,18 +283,24 @@ app.get('/api/admin/appointments', authenticateToken, async (req, res) => {
             LEFT JOIN users u ON a.user_id = u.id
             ORDER BY a.date, a.time
         `);
+        
+        const queryResult = results.get(0);
+        
+        // Transformar el formato crudo de rqlite a objetos JavaScript normales
+        let rows = [];
+        if (queryResult && queryResult.values && queryResult.columns) {
+            rows = queryResult.values.map(rowArray => {
+                const rowObj = {};
+                queryResult.columns.forEach((colName, index) => {
+                    rowObj[colName] = rowArray[index];
+                });
+                return rowObj;
+            });
+        }
 
-        const rows = results.toArray();
-        // Mapear el nombre_completo para el administrador si no existe en BD
+        // Mapear los datos para proteger al administrador
         const mappedRows = rows.map(r => {
-            if (!r.dni && r.user_id === 999999 || r.user_id === 999999) {
-                return {
-                    ...r,
-                    dni: 'admin',
-                    nombre_completo: 'Bloqueado por Administrador'
-                }
-            }
-            if (r.dni === null && r.nombre_completo === null) {
+            if (r.user_id === 999999) {
                 return {
                     ...r,
                     dni: 'admin',
