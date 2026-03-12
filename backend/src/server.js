@@ -8,20 +8,17 @@ const db = require('./database');
 const formatRqlite = (dbResult) => {
     if (!dbResult) return [];
     
-    // Obtenemos el resultado de la consulta
-    const queryData = dbResult.get ? dbResult.get(0) : dbResult[0];
-    
-    // Si la base de datos devuelve vacío, rqlite no incluye 'values'
-    if (!queryData || !queryData.columns || !queryData.values) {
-        return [];
-    }
+    let queryData;
+    if (dbResult.get) queryData = dbResult.get(0); // Si es el objeto QueryResult
+    else if (dbResult.results) queryData = dbResult.results[0]; // Si es la respuesta cruda
+    else if (Array.isArray(dbResult)) queryData = dbResult[0]; // Fallback
+    else queryData = dbResult;
 
-    // Convertimos a un array de objetos normal para React
+    if (!queryData || !queryData.columns || !queryData.values) return [];
+
     return queryData.values.map(row => {
         const obj = {};
-        queryData.columns.forEach((col, i) => {
-            obj[col] = row[i];
-        });
+        queryData.columns.forEach((col, i) => { obj[col] = row[i]; });
         return obj;
     });
 };
@@ -135,22 +132,19 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 // Obtener todas las citas y limpiar citas obsoletas de forma atómica
 app.get('/api/appointments', async (req, res) => {
     const todayStr = new Date().toISOString().split('T')[0];
-
     try {
-        await db.execute(`DELETE FROM appointments WHERE date < ?`, [todayStr]);
+        let sql = `SELECT id, date, time FROM appointments WHERE date >= ?`;
+        let params = [todayStr];
 
-        const { date } = req.query;
-        let sql = `SELECT id, date, time FROM appointments`;
-        let params = [];
-
-        if (date) {
-            sql += ` WHERE date = ?`;
-            params.push(date);
+        if (req.query.date) {
+            sql += ` AND date = ?`;
+            params.push(req.query.date);
         }
 
         const results = await db.query(sql, params);
         res.json(formatRqlite(results));
     } catch (error) {
+        console.error("Error GET citas:", error);
         res.status(500).json({ error: 'Error al obtener citas' });
     }
 });
@@ -170,50 +164,47 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const isOwnerAdmin = req.user.dni === 'admin';
 
-    if (!date || !time) {
-        return res.status(400).json({ error: 'Fecha y hora son requeridas' });
-    }
-
+    if (!date || !time) return res.status(400).json({ error: 'Fecha y hora requeridas' });
     const todayStr = new Date().toISOString().split('T')[0];
 
-    const insertAppointment = async () => {
-        try {
-            const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
-            const occupied = formatRqlite(checkRes);
-
-            if (occupied.length > 0) {
-                return res.status(400).json({ error: 'Este hueco ya está ocupado' });
-            }
-
-            const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
-            res.status(201).json({ id: insertRes.last_insert_id || Math.floor(Math.random()*1000), date, time });
-        } catch (error) {
-            if (error.message && error.message.includes('UNIQUE constraint failed')) {
-                return res.status(400).json({ error: 'Este hueco acaba de ser ocupado.' });
-            }
-            console.error("Fallo crítico en el servidor:", error);
-            res.status(500).json({ error: 'Error al crear la cita' });
-        }
-    };
-
-    // Si es admin, dejamos que reserve (bloquee) sin límite de citas
-    if (isOwnerAdmin) {
-        return await insertAppointment();
-    } 
-
     try {
-        // Verificar si el usuario normal ya tiene una cita ACTIVA
-        const userCheck = await db.query(`SELECT id FROM appointments WHERE user_id = ? AND date >= ?`, [userId, todayStr]);
-        const activeAppointments = formatRqlite(userCheck);
-        
-        if (activeAppointments.length > 0) {
-            return res.status(400).json({ error: 'Ya tienes una cita activa. Anúlala para pedir otra.' });
+        // COMPROBAR SI ESTÁ FUERA DE SERVICIO
+        const statusRes = await db.query(`SELECT value FROM system_settings WHERE key = 'service_status'`);
+        const statusData = formatRqlite(statusRes);
+        const isAvailable = statusData.length > 0 && statusData[0].value === 'available';
+
+        if (!isAvailable && !isOwnerAdmin) {
+            return res.status(403).json({ error: 'El sistema está temporalmente fuera de servicio. Vuelve a intentarlo más tarde.' });
         }
+
+        // COMPROBAR SI EL HUECO ESTÁ OCUPADO
+        const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
+        const occupied = formatRqlite(checkRes);
+
+        if (occupied.length > 0) {
+            return res.status(400).json({ error: 'Este hueco ya está ocupado' });
+        }
+
+        // COMPROBAR LÍMITE DE 1 CITA
+        if (!isOwnerAdmin) {
+            const userCheck = await db.query(`SELECT id FROM appointments WHERE user_id = ? AND date >= ?`, [userId, todayStr]);
+            const activeAppointments = formatRqlite(userCheck);
             
-        await insertAppointment();
+            if (activeAppointments.length > 0) {
+                return res.status(400).json({ error: 'Ya tienes una cita activa. Anúlala para pedir otra.' });
+            }
+        }
+
+        // INSERTAR LA CITA
+        const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
+        res.status(201).json({ id: insertRes.lastInsertId || Math.floor(Math.random()*1000), date, time });
+
     } catch (error) {
-        console.error("Error validando usuario:", error);
-        res.status(500).json({ error: 'Error interno verificando usuario' });
+        if (error.message && error.message.includes('UNIQUE constraint failed')) {
+            return res.status(400).json({ error: 'Este hueco acaba de ser ocupado por otra persona.' });
+        }
+        console.error("Error al crear cita:", error);
+        res.status(500).json({ error: 'Error interno al crear la cita' });
     }
 });
 
