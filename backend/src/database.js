@@ -22,6 +22,7 @@ const initDb = async (retries = 5) => {
                     date TEXT,
                     time TEXT,
                     user_id INTEGER,
+                    UNIQUE(date, time),
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )`],
                 [`CREATE TABLE IF NOT EXISTS system_settings (

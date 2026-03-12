@@ -189,6 +189,9 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
             const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
             res.status(201).json({ id: insertRes.last_insert_id || Math.floor(Math.random()*1000), date, time });
         } catch (error) {
+            if (error.message && error.message.includes('UNIQUE constraint failed')) {
+                return res.status(400).json({ error: 'Este hueco acaba de ser ocupado.' });
+            }
             console.error("Fallo crítico en el servidor:", error);
             res.status(500).json({ error: 'Error al crear la cita' });
         }
