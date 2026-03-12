@@ -5,6 +5,16 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit'); // IMPORTACIÓN NECESARIA
 const db = require('./database');
 
+const parseRqlite = (resultObj) => {
+    const data = resultObj.get(0);
+    if (!data || !data.values) return []; // Si no hay valores, devuelve array vacío
+    return data.values.map(row => {
+        let obj = {};
+        data.columns.forEach((col, i) => { obj[col] = row[i]; });
+        return obj;
+    });
+};
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -128,7 +138,6 @@ app.get('/api/appointments', async (req, res) => {
     const todayStr = new Date().toISOString().split('T')[0];
 
     try {
-        // Limpieza Pasiva: Se ejecuta como comando en el clúster
         await db.execute(`DELETE FROM appointments WHERE date < ?`, [todayStr]);
 
         const { date } = req.query;
@@ -141,34 +150,26 @@ app.get('/api/appointments', async (req, res) => {
         }
 
         const results = await db.query(sql, params);
-        res.json(results.toArray()); // Convierte los resultados de rqlite a un array estándar
+        res.json(parseRqlite(results));
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener citas' });
     }
 });
 
-// Obtener mis citas (opcional, para UI)
+// Obtener mis citas
 app.get('/api/appointments/me', authenticateToken, async (req, res) => {
     try {
         const results = await db.query(`SELECT id, date, time FROM appointments WHERE user_id = ?`, [req.user.id]);
-        res.json(results.toArray());
+        res.json(parseRqlite(results));
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener tus citas' });
     }
 });
 
-// Crear una cita con validación de disponibilidad distribuida
 app.post('/api/appointments', authenticateToken, async (req, res) => {
     const { date, time } = req.body;
     const userId = req.user.id;
     const isOwnerAdmin = req.user.dni === 'admin';
-
-    // --- AÑADE ESTOS LOGS AQUÍ ---
-    console.log(`--- Intento de cita ---`);
-    console.log(`Usuario: ${req.user.dni} (ID: ${userId})`);
-    console.log(`Fecha recibida: "${date}"`);
-    console.log(`Hora recibida: "${time}"`);
-    // -----------------------------
 
     if (!date || !time) {
         return res.status(400).json({ error: 'Fecha y hora son requeridas' });
@@ -176,39 +177,40 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    // Función auxiliar para insertar la cita adaptada a rqlite
     const insertAppointment = async () => {
         try {
             const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
-            const rows = checkRes.toArray();
+            const occupied = parseRqlite(checkRes);
 
-            if (rows.length > 0) {
+            if (occupied.length > 0) {
                 return res.status(400).json({ error: 'Este hueco ya está ocupado' });
             }
 
             const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
-            
-            const newId = insertRes.lastInsertId || insertRes.last_insert_id || Math.floor(Math.random() * 1000);
-            
-            res.status(201).json({ id: newId, date, time });
+            res.status(201).json({ id: insertRes.last_insert_id || Math.floor(Math.random()*1000), date, time });
         } catch (error) {
             console.error("Fallo crítico en el servidor:", error);
             res.status(500).json({ error: 'Error al crear la cita' });
         }
     };
 
-    // Saltar validación de 1 cita máxima si es el Administrador
+    // Si es admin, dejamos que reserve (bloquee) sin límite de citas
     if (isOwnerAdmin) {
         return await insertAppointment();
-    }
+    } 
 
     try {
-        // Verificar si el usuario ya tiene una cita ACTIVA (hoy o futuro)
+        // Verificar si el usuario normal ya tiene una cita ACTIVA
         const userCheck = await db.query(`SELECT id FROM appointments WHERE user_id = ? AND date >= ?`, [userId, todayStr]);
-        if (userCheck.get(0)) return res.status(400).json({ error: 'Ya tienes una cita activa. Anúlala para pedir otra.' });
-
+        const activeAppointments = parseRqlite(userCheck);
+        
+        if (activeAppointments.length > 0) {
+            return res.status(400).json({ error: 'Ya tienes una cita activa. Anúlala para pedir otra.' });
+        }
+            
         await insertAppointment();
     } catch (error) {
+        console.error("Error validando usuario:", error);
         res.status(500).json({ error: 'Error interno verificando usuario' });
     }
 });
