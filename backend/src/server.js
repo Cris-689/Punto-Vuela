@@ -5,6 +5,27 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit'); // IMPORTACIÓN NECESARIA
 const db = require('./database');
 
+const formatRqlite = (dbResult) => {
+    if (!dbResult) return [];
+    
+    // Obtenemos el resultado de la consulta
+    const queryData = dbResult.get ? dbResult.get(0) : dbResult[0];
+    
+    // Si la base de datos devuelve vacío, rqlite no incluye 'values'
+    if (!queryData || !queryData.columns || !queryData.values) {
+        return [];
+    }
+
+    // Convertimos a un array de objetos normal para React
+    return queryData.values.map(row => {
+        const obj = {};
+        queryData.columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
+        return obj;
+    });
+};
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -82,18 +103,6 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// Función para convertir resultados de rqlite a objetos de Javascript
-const parseRqliteRows = (resultData) => {
-    if (!resultData.values || !resultData.columns) return [];
-    return resultData.values.map(rowArray => {
-        const rowObj = {};
-        resultData.columns.forEach((colName, index) => {
-            rowObj[colName] = rowArray[index];
-        });
-        return rowObj;
-    });
-};
-
 // Login de usuario - Consulta distribuida
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const { dni, support_number } = req.body;
@@ -140,7 +149,7 @@ app.get('/api/appointments', async (req, res) => {
         }
 
         const results = await db.query(sql, params);
-        res.json(results.toArray());
+        res.json(formatRqlite(results));
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener citas' });
     }
@@ -150,7 +159,7 @@ app.get('/api/appointments', async (req, res) => {
 app.get('/api/appointments/me', authenticateToken, async (req, res) => {
     try {
         const results = await db.query(`SELECT id, date, time FROM appointments WHERE user_id = ?`, [req.user.id]);
-        res.json(results.toArray());
+        res.json(formatRqlite(results));
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener tus citas' });
     }
@@ -170,7 +179,7 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     const insertAppointment = async () => {
         try {
             const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
-            const occupied = checkRes.toArray()
+            const occupied = formatRqlite(checkRes);
 
             if (occupied.length > 0) {
                 return res.status(400).json({ error: 'Este hueco ya está ocupado' });
@@ -195,7 +204,7 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     try {
         // Verificar si el usuario normal ya tiene una cita ACTIVA
         const userCheck = await db.query(`SELECT id FROM appointments WHERE user_id = ? AND date >= ?`, [userId, todayStr]);
-        const activeAppointments = userCheck.toArray();
+        const activeAppointments = formatRqlite(userCheck);
         
         if (activeAppointments.length > 0) {
             return res.status(400).json({ error: 'Ya tienes una cita activa. Anúlala para pedir otra.' });
