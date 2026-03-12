@@ -104,10 +104,9 @@ const parseRqliteRows = (resultData) => {
     });
 };
 
-// Login de usuario - Consulta distribuida
+// Login
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const { dni, support_number } = req.body;
-    
     const ADMIN_DNI = process.env.ADMIN_DNI;
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
@@ -117,9 +116,8 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     }
 
     try {
-        const results = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
-        const rows = results.toArray();
-        const user = rows.length > 0 ? rows[0] : null;
+        const users = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
+        const user = users[0]; // Ya podemos acceder directamente como un array normal
 
         if (!user || !(await bcrypt.compare(support_number, user.support_number))) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -128,63 +126,50 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         const token = jwt.sign({ id: user.id, dni: user.dni }, JWT_SECRET, { expiresIn: '2h' });
         res.json({ token, user: { id: user.id, dni: user.dni } });
     } catch (error) {
-        console.error("Error en el login:", error);
         res.status(500).json({ error: 'Error interno en el login' });
     }
 });
 
-// Obtener todas las citas y limpiar citas obsoletas de forma atómica
+// GET Todas las citas
 app.get('/api/appointments', async (req, res) => {
     const todayStr = new Date().toISOString().split('T')[0];
-
     try {
         await db.execute(`DELETE FROM appointments WHERE date < ?`, [todayStr]);
-
         const { date } = req.query;
         let sql = `SELECT id, date, time FROM appointments`;
         let params = [];
-
-        if (date) {
-            sql += ` WHERE date = ?`;
-            params.push(date);
-        }
-
+        if (date) { sql += ` WHERE date = ?`; params.push(date); }
+        
         const results = await db.query(sql, params);
-        res.json(parseRqlite(results));
+        res.json(results); // Se envía directamente al frontend
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener citas' });
     }
 });
 
-// Obtener mis citas
+// GET Mis citas
 app.get('/api/appointments/me', authenticateToken, async (req, res) => {
     try {
         const results = await db.query(`SELECT id, date, time FROM appointments WHERE user_id = ?`, [req.user.id]);
-        res.json(parseRqlite(results));
+        res.json(results);
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener tus citas' });
     }
 });
 
+// POST Crear cita (con validación real de 1 cita máxima)
 app.post('/api/appointments', authenticateToken, async (req, res) => {
     const { date, time } = req.body;
     const userId = req.user.id;
     const isOwnerAdmin = req.user.dni === 'admin';
 
-    if (!date || !time) {
-        return res.status(400).json({ error: 'Fecha y hora son requeridas' });
-    }
-
+    if (!date || !time) return res.status(400).json({ error: 'Fecha y hora requeridas' });
     const todayStr = new Date().toISOString().split('T')[0];
 
     const insertAppointment = async () => {
         try {
-            const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
-            const occupied = parseRqlite(checkRes);
-
-            if (occupied.length > 0) {
-                return res.status(400).json({ error: 'Este hueco ya está ocupado' });
-            }
+            const occupied = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
+            if (occupied.length > 0) return res.status(400).json({ error: 'Este hueco ya está ocupado' });
 
             const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
             res.status(201).json({ id: insertRes.last_insert_id || Math.floor(Math.random()*1000), date, time });
@@ -192,112 +177,49 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
             if (error.message && error.message.includes('UNIQUE constraint failed')) {
                 return res.status(400).json({ error: 'Este hueco acaba de ser ocupado.' });
             }
-            console.error("Fallo crítico en el servidor:", error);
             res.status(500).json({ error: 'Error al crear la cita' });
         }
     };
 
-    // Si es admin, dejamos que reserve (bloquee) sin límite de citas
-    if (isOwnerAdmin) {
-        return await insertAppointment();
-    } 
+    if (isOwnerAdmin) return await insertAppointment();
 
     try {
-        // Verificar si el usuario normal ya tiene una cita ACTIVA
-        const userCheck = await db.query(`SELECT id FROM appointments WHERE user_id = ? AND date >= ?`, [userId, todayStr]);
-        const activeAppointments = parseRqlite(userCheck);
-        
+        // Validación de límite de citas
+        const activeAppointments = await db.query(`SELECT id FROM appointments WHERE user_id = ? AND date >= ?`, [userId, todayStr]);
         if (activeAppointments.length > 0) {
             return res.status(400).json({ error: 'Ya tienes una cita activa. Anúlala para pedir otra.' });
         }
-            
         await insertAppointment();
     } catch (error) {
-        console.error("Error validando usuario:", error);
         res.status(500).json({ error: 'Error interno verificando usuario' });
     }
 });
 
-// Anular una cita con comprobación de propiedad
-app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
-    const appointmentId = req.params.id;
-    const userId = req.user.id;
-
-    try {
-        const result = await db.execute(`DELETE FROM appointments WHERE id = ? AND user_id = ?`, [appointmentId, userId]);
-        if (result.rows_affected === 0) return res.status(403).json({ error: 'No tienes permiso o la cita no existe' });
-        res.json({ message: 'Cita anulada correctamente' });
-    } catch (error) {
-        res.status(500).json({ error: 'Error al anular la cita' });
-    }
-});
-
-// Obtener estado del servicio (público) - Consulta distribuida
+// GET Estado
 app.get('/api/status', async (req, res) => {
     try {
         const results = await db.query(`SELECT value FROM system_settings WHERE key = 'service_status'`);
-        const row = results.get(0);
-        res.json({ status: row ? row.value : 'available' });
+        res.json({ status: results[0] ? results[0].value : 'available' });
     } catch (error) {
-        res.status(500).json({ error: 'Error obteniendo estado del sistema' });
+        res.status(500).json({ error: 'Error obteniendo estado' });
     }
 });
 
-// Admin: Cambiar estado del servicio
-app.put('/api/admin/status', authenticateToken, async (req, res) => {
-    if (req.user.dni !== 'admin') {
-        return res.status(403).json({ error: 'Acceso denegado.' });
-    }
-
-    const { status } = req.body;
-    if (status !== 'available' && status !== 'unavailable') {
-        return res.status(400).json({ error: 'Estado inválido' });
-    }
-
-    try {
-        await db.execute(`UPDATE system_settings SET value = ? WHERE key = 'service_status'`, [status]);
-        res.json({ status });
-    } catch (error) {
-        res.status(500).json({ error: 'Error actualizando el estado' });
-    }
-});
-
-// Admin: Obtener todas las citas y todos los usuarios asociados - Join distribuido
+// GET Admin Appointments
 app.get('/api/admin/appointments', authenticateToken, async (req, res) => {
-    if (req.user.dni !== 'admin') {
-        return res.status(403).json({ error: 'Acceso denegado.' });
-    }
+    if (req.user.dni !== 'admin') return res.status(403).json({ error: 'Acceso denegado.' });
 
     try {
-        const results = await db.query(`
+        const rows = await db.query(`
             SELECT a.id, a.date, a.time, a.user_id, u.dni, u.nombre_completo, u.support_number
             FROM appointments a
             LEFT JOIN users u ON a.user_id = u.id
             ORDER BY a.date, a.time
         `);
         
-        const queryResult = results.get(0);
-        
-        // Transformar el formato crudo de rqlite a objetos JavaScript normales
-        let rows = [];
-        if (queryResult && queryResult.values && queryResult.columns) {
-            rows = queryResult.values.map(rowArray => {
-                const rowObj = {};
-                queryResult.columns.forEach((colName, index) => {
-                    rowObj[colName] = rowArray[index];
-                });
-                return rowObj;
-            });
-        }
-
-        // Mapear los datos para proteger al administrador
         const mappedRows = rows.map(r => {
-            if (r.user_id === 0) {
-                return {
-                    ...r,
-                    dni: 'admin',
-                    nombre_completo: 'Bloqueado por Administrador'
-                }
+            if (r.user_id === 0 || r.dni === 'admin') {
+                return { ...r, dni: 'admin', nombre_completo: 'Bloqueado por Administrador' };
             }
             return r;
         });
