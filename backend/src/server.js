@@ -32,7 +32,7 @@ app.use(express.json());
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    
+
     if (token == null) return res.sendStatus(401);
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -43,7 +43,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Helper function to validate DNI format and mathematical correctness
-const validateDni = (dni) => {    
+const validateDni = (dni) => {
     const validChars = 'TRWAGMYFPDXBNJZSQVHLCKE';
     const dniRegex = /^[0-9]{8}[TRWAGMYFPDXBNJZSQVHLCKE]$/i;
 
@@ -71,8 +71,8 @@ app.post('/api/auth/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(support_number, 10);
         // La ejecución se realiza a través de la red hacia el clúster de rqlite
         const result = await db.execute(`INSERT INTO users (dni, nombre_completo, support_number) VALUES (?, ?, ?)`, [dni, nombre_completo, hashedPassword]);
-        
-        res.status(201).json({ message: 'Usuario registrado exitosamente', userId: result.last_insert_id() });
+
+        res.status(201).json({ message: 'Usuario registrado exitosamente', userId: result.last_insert_id });
     } catch (error) {
         // Manejo de error de unicidad adaptado a la respuesta del driver de red
         if (error.message && error.message.includes('UNIQUE constraint failed')) {
@@ -82,10 +82,22 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
+// Función para convertir resultados de rqlite a objetos de Javascript
+const parseRqliteRows = (resultData) => {
+    if (!resultData.values || !resultData.columns) return [];
+    return resultData.values.map(rowArray => {
+        const rowObj = {};
+        resultData.columns.forEach((colName, index) => {
+            rowObj[colName] = rowArray[index];
+        });
+        return rowObj;
+    });
+};
+
 // Login de usuario - Consulta distribuida
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const { dni, support_number } = req.body;
-    
+
     // Credenciales de admin extraídas de secretos de Kubernetes
     const ADMIN_DNI = process.env.ADMIN_DNI;
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
@@ -97,7 +109,8 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
     try {
         const results = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
-        const user = results.get(0);
+        const usersData = parseRqliteRows(results.get(0));
+        const user = usersData[0]; // Ahora sí es la fila real
 
         if (!user || !(await bcrypt.compare(support_number, user.support_number))) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -175,13 +188,13 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
                 return res.status(500).json({ error: 'Error de comunicación con la base de datos' });
             }
 
-            // 2. Ahora sí, verificamos si hay una cita real
-            if (rows.length > 0) {
+            // 2. verificamos si hay una cita real
+            if (queryResult.values && queryResult.values.length > 0) {
                 return res.status(400).json({ error: 'Este hueco ya está ocupado' });
             }
 
             const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
-            res.status(201).json({ id: insertRes.last_insert_id(), date, time });
+            res.status(201).json({ id: insertRes.last_insert_id, date, time });
         } catch (error) {
             console.error("Fallo crítico en el servidor:", error);
             res.status(500).json({ error: 'Error al crear la cita' });
@@ -191,13 +204,13 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     // Saltar validación de 1 cita máxima si es el Administrador
     if (isOwnerAdmin) {
         return await insertAppointment();
-    } 
+    }
 
     try {
         // Verificar si el usuario ya tiene una cita ACTIVA (hoy o futuro)
         const userCheck = await db.query(`SELECT id FROM appointments WHERE user_id = ? AND date >= ?`, [userId, todayStr]);
         if (userCheck.get(0)) return res.status(400).json({ error: 'Ya tienes una cita activa. Anúlala para pedir otra.' });
-            
+
         await insertAppointment();
     } catch (error) {
         res.status(500).json({ error: 'Error interno verificando usuario' });
@@ -211,7 +224,7 @@ app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
 
     try {
         const result = await db.execute(`DELETE FROM appointments WHERE id = ? AND user_id = ?`, [appointmentId, userId]);
-        if (result.rows_affected() === 0) return res.status(403).json({ error: 'No tienes permiso o la cita no existe' });
+        if (result.rows_affected === 0) return res.status(403).json({ error: 'No tienes permiso o la cita no existe' });
         res.json({ message: 'Cita anulada correctamente' });
     } catch (error) {
         res.status(500).json({ error: 'Error al anular la cita' });
@@ -261,7 +274,7 @@ app.get('/api/admin/appointments', authenticateToken, async (req, res) => {
             LEFT JOIN users u ON a.user_id = u.id
             ORDER BY a.date, a.time
         `);
-        
+
         const rows = results.toArray();
         // Mapear el nombre_completo para el administrador si no existe en BD
         const mappedRows = rows.map(r => {
@@ -315,7 +328,7 @@ app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
     try {
         // 1. Eliminamos las citas asociadas para mantener la integridad referencial
         await db.execute(`DELETE FROM appointments WHERE user_id = ?`, [userIdToDelete]);
-        
+
         // 2. Eliminamos al usuario
         const result = await db.execute(`DELETE FROM users WHERE id = ?`, [userIdToDelete]);
 

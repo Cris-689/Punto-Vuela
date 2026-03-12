@@ -28,6 +28,7 @@ const initDb = async (retries = 5) => {
                     key TEXT PRIMARY KEY,
                     value TEXT
                 )`],
+                [`INSERT OR IGNORE INTO users (id, dni, nombre_completo, support_number) VALUES (999999, 'admin', 'Administrador', 'admin')`],
                 [`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('service_status', 'available')`]
             ]);
             console.log('Conectado a rqlite: Estructura de base de datos sincronizada.');
