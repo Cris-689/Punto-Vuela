@@ -47,20 +47,13 @@ initDb();
 
 // Exportamos un objeto que mapea correctamente los parámetros para server.js
 module.exports = {
+    // Corrige el error "want X got 0" envolviendo la consulta y los parámetros
     execute: async (sql, params = []) => {
         const result = await client.execute([[sql, ...params]]);
         return result.get(0);
     },
     query: async (sql, params = []) => {
         const result = await client.query([[sql, ...params]]);
-        const data = result.get(0);
-        
-        if (!data || !data.values) return [];
-        
-        return data.values.map(row => {
-            let obj = {};
-            data.columns.forEach((col, i) => { obj[col] = row[i]; });
-            return obj;
-        });
+        return result;
     }
 };
