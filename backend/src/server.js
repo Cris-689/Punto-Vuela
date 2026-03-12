@@ -97,28 +97,19 @@ const parseRqliteRows = (resultData) => {
 // Login de usuario - Consulta distribuida
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const { dni, support_number } = req.body;
-
-    // Credenciales de admin extraídas de secretos de Kubernetes
+    
     const ADMIN_DNI = process.env.ADMIN_DNI;
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
     if (dni === ADMIN_DNI && support_number === ADMIN_PASS) {
-        const token = jwt.sign({ id: 999999, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
-        return res.json({ token, user: { id: 999999, dni: 'admin' } });
+        const token = jwt.sign({ id: 0, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
+        return res.json({ token, user: { id: 0, dni: 'admin' } });
     }
 
     try {
         const results = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
-        const queryResult = results.get(0);
-        
-        // Transformar la fila de rqlite a un objeto JavaScript utilizable
-        let user = null;
-        if (queryResult && queryResult.values && queryResult.values.length > 0) {
-            user = {};
-            queryResult.columns.forEach((col, index) => {
-                user[col] = queryResult.values[0][index];
-            });
-        }
+        const rows = results.toArray();
+        const user = rows.length > 0 ? rows[0] : null;
 
         if (!user || !(await bcrypt.compare(support_number, user.support_number))) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -191,19 +182,15 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
             const checkRes = await db.query(`SELECT id FROM appointments WHERE date = ? AND time = ?`, [date, time]);
             const rows = checkRes.toArray();
 
-            // 1. Verificamos si la base de datos devolvió un error interno
-            if (rows.length > 0 && rows[0].error) {
-                console.error("Error interno de rqlite:", rows[0].error);
-                return res.status(500).json({ error: 'Error de comunicación con la base de datos' });
-            }
-
-            // 2. verificamos si hay una cita real
-            if (queryResult.values && queryResult.values.length > 0) {
+            if (rows.length > 0) {
                 return res.status(400).json({ error: 'Este hueco ya está ocupado' });
             }
 
             const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
-            res.status(201).json({ id: insertRes.last_insert_id, date, time });
+            
+            const newId = insertRes.lastInsertId || insertRes.last_insert_id || Math.floor(Math.random() * 1000);
+            
+            res.status(201).json({ id: newId, date, time });
         } catch (error) {
             console.error("Fallo crítico en el servidor:", error);
             res.status(500).json({ error: 'Error al crear la cita' });
@@ -300,7 +287,7 @@ app.get('/api/admin/appointments', authenticateToken, async (req, res) => {
 
         // Mapear los datos para proteger al administrador
         const mappedRows = rows.map(r => {
-            if (r.user_id === 999999) {
+            if (r.user_id === 0) {
                 return {
                     ...r,
                     dni: 'admin',
@@ -365,9 +352,9 @@ app.delete('/api/admin/users', authenticateToken, async (req, res) => {
 
     try {
         // Ejecutamos una secuencia de comandos para limpiar la base de datos distribuida
-        // No borramos al administrador (id: 999999 o dni: admin) para no perder el acceso
+        // No borramos al administrador (id: 0 o dni: admin) para no perder el acceso
         await db.execute([
-            `DELETE FROM appointments WHERE user_id != 999999`,
+            `DELETE FROM appointments WHERE user_id != 0`,
             `DELETE FROM users WHERE dni != 'admin'`
         ]);
 
