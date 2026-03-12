@@ -17,8 +17,14 @@ export default function Dashboard({ user }) {
         })
       ]);
 
-      if (allRes.ok) setAppointments(await allRes.json());
-      if (meRes.ok) setMyAppointments(await meRes.json());
+      if (allRes.ok) {
+        const data = await allRes.json();
+        setAppointments(Array.isArray(data) ? data : []);
+      }
+      if (meRes.ok) {
+        const data = await meRes.json();
+        setMyAppointments(Array.isArray(data) ? data : []);
+      }
       setLoading(false);
     } catch (err) {
       console.error(err);

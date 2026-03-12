@@ -269,29 +269,17 @@ app.get('/api/admin/appointments', authenticateToken, async (req, res) => {
 
     try {
         const results = await db.query(`
-            SELECT a.id, a.date, a.time, a.user_id, u.dni, u.nombre_completo, u.support_number
+            SELECT a.id, a.date, a.time, a.user_id, u.dni, u.nombre_completo
             FROM appointments a
             LEFT JOIN users u ON a.user_id = u.id
             ORDER BY a.date, a.time
         `);
         
-        const queryResult = results.get(0);
-        
-        // Transformar el formato crudo de rqlite a objetos JavaScript normales
-        let rows = [];
-        if (queryResult && queryResult.values && queryResult.columns) {
-            rows = queryResult.values.map(rowArray => {
-                const rowObj = {};
-                queryResult.columns.forEach((colName, index) => {
-                    rowObj[colName] = rowArray[index];
-                });
-                return rowObj;
-            });
-        }
+        let rows = formatRqlite(results);
 
-        // Mapear los datos para proteger al administrador
+        // Mapear los datos para ocultar el ID 0 del administrador
         const mappedRows = rows.map(r => {
-            if (r.user_id === 0) {
+            if (r.user_id === 0 || r.dni === 'admin') {
                 return {
                     ...r,
                     dni: 'admin',
@@ -303,6 +291,7 @@ app.get('/api/admin/appointments', authenticateToken, async (req, res) => {
 
         res.json(mappedRows);
     } catch (error) {
+        console.error("Error en admin:", error);
         res.status(500).json({ error: 'Error al obtener todas las citas' });
     }
 });

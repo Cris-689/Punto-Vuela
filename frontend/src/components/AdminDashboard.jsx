@@ -25,7 +25,10 @@ export default function AdminDashboard({ user }) {
       const res = await fetch('/api/admin/appointments', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) setAllAppointments(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setAllAppointments(Array.isArray(data) ? data : []);
+      }
       setLoading(false);
     } catch (err) {
       console.error(err);
