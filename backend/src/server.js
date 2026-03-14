@@ -8,21 +8,25 @@ const db = require('./database');
 const formatRqlite = (queryData) => {
     if (!queryData) return [];
 
-    if (queryData.data) {
-        return Array.isArray(queryData.data) ? queryData.data : [queryData.data];
-    }
+    let parsedArray = [];
 
-    if (queryData.columns && queryData.values) {
-        return queryData.values.map(row => {
+    if (queryData.data) {
+        parsedArray = Array.isArray(queryData.data) ? queryData.data : [queryData.data];
+    } 
+    else if (queryData.columns && queryData.values) {
+        parsedArray = queryData.values.map(row => {
             const obj = {};
             queryData.columns.forEach((col, i) => { obj[col] = row[i]; });
             return obj;
         });
+    } 
+    else if (Array.isArray(queryData)) {
+        parsedArray = queryData;
     }
 
-    if (Array.isArray(queryData)) return queryData;
-
-    return [];
+    return parsedArray.filter(item => {
+        return item && typeof item === 'object' && Object.keys(item).length > 0;
+    });
 };
 
 const app = express();
