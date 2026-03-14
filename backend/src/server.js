@@ -250,9 +250,14 @@ app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
 app.get('/api/status', async (req, res) => {
     try {
         const results = await db.query(`SELECT value FROM system_settings WHERE key = 'service_status'`);
-        const row = results.get(0);
-        res.json({ status: row ? row.value : 'available' });
+        
+        // CORRECCIÓN: Usamos formatRqlite para leer los datos de forma segura
+        const rows = formatRqlite(results);
+        const status = rows.length > 0 ? rows[0].value : 'available';
+        
+        res.json({ status });
     } catch (error) {
+        console.error("Error al obtener estado:", error);
         res.status(500).json({ error: 'Error obteniendo estado del sistema' });
     }
 });
