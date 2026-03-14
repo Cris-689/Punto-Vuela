@@ -60,7 +60,9 @@ module.exports = {
     },
     query: async (sql, params = []) => {
         const payload = params.length > 0 ? [[sql, ...params]] : [sql];
-        const result = await client.query(payload, 'strong');
+        
+        const result = await client.query(payload); 
+        
         const firstResult = result.get ? result.get(0) : (result.results ? result.results[0] : result[0]);
         
         if (firstResult && firstResult.error) throw new Error(firstResult.error);

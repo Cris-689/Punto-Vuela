@@ -94,7 +94,11 @@ app.post('/api/auth/register', async (req, res) => {
 
 // Login de usuario - Consulta distribuida
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
-    const { dni, support_number } = req.body;
+    let { dni, support_number } = req.body;
+    
+    // Limpieza CRÍTICA: Quitamos espacios en blanco accidentales que envíe el frontend
+    dni = dni ? dni.trim() : '';
+    support_number = support_number ? support_number.trim() : '';
     
     const ADMIN_DNI = process.env.ADMIN_DNI;
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
@@ -105,26 +109,29 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     }
 
     try {
-        // 1. Buscamos al usuario en la base de datos
+        console.log(`\n [DEBUG] Intentando Login con DNI: '${dni}'`);
+        
         const queryData = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
+        console.log(`[DEBUG] Rqlite Raw Data:`, JSON.stringify(queryData));
+
         const rows = formatRqlite(queryData);
+        console.log(`[DEBUG] Filas parseadas:`, JSON.stringify(rows));
+        
         const user = rows.length > 0 ? rows[0] : null;
 
-        // 2. Comprobamos si el usuario existe
         if (!user) {
             console.log(`[LOGIN FALLIDO] DNI no encontrado en DB: ${dni}`);
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
 
-        // 3. Comprobamos si la contraseña coincide
         const isMatch = await bcrypt.compare(support_number, user.support_number);
         if (!isMatch) {
             console.log(`[LOGIN FALLIDO] Contraseña incorrecta para el DNI: ${dni}`);
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
 
-        // 4. Éxito
         const token = jwt.sign({ id: user.id, dni: user.dni }, JWT_SECRET, { expiresIn: '2h' });
+        console.log(`[LOGIN OK] Sesión iniciada para DNI: ${dni}`);
         res.json({ token, user: { id: user.id, dni: user.dni } });
     } catch (error) {
         console.error("[ERROR CRÍTICO EN LOGIN]:", error);
