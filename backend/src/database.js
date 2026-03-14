@@ -51,11 +51,19 @@ initDb();
 // Exportamos un objeto que mapea los parámetros para server.js
 module.exports = {
     execute: async (sql, params = []) => {
-        const result = await client.execute([[sql, ...params]]);
-        return result.get(0);
+        const payload = params.length > 0 ? [[sql, ...params]] : [sql];
+        const result = await client.execute(payload);
+        const firstResult = result.get ? result.get(0) : (result.results ? result.results[0] : result[0]);
+        
+        if (firstResult && firstResult.error) throw new Error(firstResult.error);
+        return firstResult;
     },
     query: async (sql, params = []) => {
-        const result = await client.query([[sql, ...params]]);
-        return result;
+        const payload = params.length > 0 ? [[sql, ...params]] : [sql];
+        const result = await client.query(payload, 'strong');
+        const firstResult = result.get ? result.get(0) : (result.results ? result.results[0] : result[0]);
+        
+        if (firstResult && firstResult.error) throw new Error(firstResult.error);
+        return firstResult;
     }
 };

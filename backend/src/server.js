@@ -5,15 +5,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit'); // IMPORTACIÓN NECESARIA
 const db = require('./database');
 
-const formatRqlite = (dbResult) => {
-    if (!dbResult) return [];
-    
-    let queryData;
-    if (dbResult.get) queryData = dbResult.get(0); // Si es el objeto QueryResult
-    else if (dbResult.results) queryData = dbResult.results[0]; // Si es la respuesta cruda
-    else if (Array.isArray(dbResult)) queryData = dbResult[0]; // Fallback
-    else queryData = dbResult;
-
+const formatRqlite = (queryData) => {
     if (!queryData || !queryData.columns || !queryData.values) return [];
 
     return queryData.values.map(row => {
@@ -107,24 +99,35 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const ADMIN_DNI = process.env.ADMIN_DNI;
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
-    if (ADMIN_DNI && ADMIN_PASS && dni === ADMIN_DNI && support_number === ADMIN_PASS){
+    if (ADMIN_DNI && ADMIN_PASS && dni === ADMIN_DNI && support_number === ADMIN_PASS) {
         const token = jwt.sign({ id: 0, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
         return res.json({ token, user: { id: 0, dni: 'admin' } });
     }
 
     try {
-        const results = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
-        const rows = formatRqlite(results);
+        // 1. Buscamos al usuario en la base de datos
+        const queryData = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
+        const rows = formatRqlite(queryData);
         const user = rows.length > 0 ? rows[0] : null;
 
-        if (!user || !(await bcrypt.compare(support_number, user.support_number))) {
+        // 2. Comprobamos si el usuario existe
+        if (!user) {
+            console.log(`[LOGIN FALLIDO] DNI no encontrado en DB: ${dni}`);
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
 
+        // 3. Comprobamos si la contraseña coincide
+        const isMatch = await bcrypt.compare(support_number, user.support_number);
+        if (!isMatch) {
+            console.log(`[LOGIN FALLIDO] Contraseña incorrecta para el DNI: ${dni}`);
+            return res.status(401).json({ error: 'Credenciales inválidas' });
+        }
+
+        // 4. Éxito
         const token = jwt.sign({ id: user.id, dni: user.dni }, JWT_SECRET, { expiresIn: '2h' });
         res.json({ token, user: { id: user.id, dni: user.dni } });
     } catch (error) {
-        console.error("Error en el login:", error);
+        console.error("[ERROR CRÍTICO EN LOGIN]:", error);
         res.status(500).json({ error: 'Error interno en el login' });
     }
 });
