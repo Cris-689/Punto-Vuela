@@ -6,13 +6,23 @@ const rateLimit = require('express-rate-limit'); // IMPORTACIÓN NECESARIA
 const db = require('./database');
 
 const formatRqlite = (queryData) => {
-    if (!queryData || !queryData.columns || !queryData.values) return [];
+    if (!queryData) return [];
 
-    return queryData.values.map(row => {
-        const obj = {};
-        queryData.columns.forEach((col, i) => { obj[col] = row[i]; });
-        return obj;
-    });
+    if (queryData.data) {
+        return Array.isArray(queryData.data) ? queryData.data : [queryData.data];
+    }
+
+    if (queryData.columns && queryData.values) {
+        return queryData.values.map(row => {
+            const obj = {};
+            queryData.columns.forEach((col, i) => { obj[col] = row[i]; });
+            return obj;
+        });
+    }
+
+    if (Array.isArray(queryData)) return queryData;
+
+    return [];
 };
 
 const app = express();
