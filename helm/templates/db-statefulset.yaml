@@ -29,32 +29,37 @@ spec:
         command: ["rqlited"]
         resources:
             {{- toYaml .Values.database.resources | nindent 12 }}
-        # Configurar rqlite para trabajar en red y persistir datos.
         args: 
-          # Identificador único del nodo en el clúster Raft.
           - "-node-id"
           - "$(POD_NAME)"
-          # Dirección donde el Backend enviará las consultas SQL.
+          # Bind a todas las interfaces locales
           - "-http-addr"
-          - "$(POD_IP):4001"
-          # Dirección para la comunicación interna de sincronización entre pods.
+          - "0.0.0.0:4001"
           - "-raft-addr"
-          - "$(POD_IP):4002"
+          - "0.0.0.0:4002"
+          # Anunciar el nombre DNS estable del Pod en lugar de la IP efímera
+          - "-http-adv-addr"
+          - "$(POD_NAME).{{ .Values.database.name }}-headless.$(POD_NAMESPACE).svc.cluster.local:4001"
+          - "-raft-adv-addr"
+          - "$(POD_NAME).{{ .Values.database.name }}-headless.$(POD_NAMESPACE).svc.cluster.local:4002"
           - "-disco-mode"
           - "dns"
+          # FQDN completo para evitar errores de resolución en Alpine
           - "-disco-config"
-          - '{"name":"{{ .Values.database.name }}-headless"}'
-          # Directorio donde se guardará el archivo de base de datos replicado.
+          - '{"name":"{{ .Values.database.name }}-headless.$(POD_NAMESPACE).svc.cluster.local"}'
           - "-bootstrap-expect=3"
           - "/data"
           
-        # 
-        # obtenemos el nombre real del Pod (vuela-db-0, vuela-db-1) y se lo damos a rqlite.
         env:
         - name: POD_NAME
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        # NECESITAMOS INYECTAR EL NAMESPACE PARA CONSTRUIR EL FQDN
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         - name: POD_IP
           valueFrom:
             fieldRef:
