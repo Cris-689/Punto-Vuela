@@ -73,6 +73,12 @@ export default function Auth({ onLogin }) {
           body: JSON.stringify({ dni, support_number: supportNumber })
         });
         const loginData = await loginRes.json();
+        
+        // Comprobar si el auto-login falló antes de continuar
+        if (!loginRes.ok) {
+            throw new Error(loginData.error || 'Usuario creado, pero hubo un error al iniciar sesión automáticamente.');
+        }
+
         onLogin(loginData.user, loginData.token);
       } else {
         onLogin(data.user, data.token);
