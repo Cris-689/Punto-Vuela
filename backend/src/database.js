@@ -1,6 +1,10 @@
 const { DataApiClient } = require('rqlite-js');
 
 const dbUrl = process.env.DB_URL;
+if (!dbUrl) {
+    console.error('ERROR CRÍTICO: La variable DB_URL no está definida.');
+    process.exit(1);
+}
 const client = new DataApiClient(dbUrl);
 
 // Función de ayuda para reintentar la conexión (Evita el error 503 al arrancar)
@@ -9,7 +13,6 @@ const wait = (ms) => new Promise(res => setTimeout(res, ms));
 const initDb = async (retries = 5) => {
     while (retries > 0) {
         try {
-            // rqlite-js espera un array de arrays para consultas parametrizadas
             await client.execute([
                 [`CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,9 +48,8 @@ const initDb = async (retries = 5) => {
 
 initDb();
 
-// Exportamos un objeto que mapea correctamente los parámetros para server.js
+// Exportamos un objeto que mapea los parámetros para server.js
 module.exports = {
-    // Corrige el error "want X got 0" envolviendo la consulta y los parámetros
     execute: async (sql, params = []) => {
         const result = await client.execute([[sql, ...params]]);
         return result.get(0);

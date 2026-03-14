@@ -107,14 +107,14 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const ADMIN_DNI = process.env.ADMIN_DNI;
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
-    if (dni === ADMIN_DNI && support_number === ADMIN_PASS) {
+    if (ADMIN_DNI && ADMIN_PASS && dni === ADMIN_DNI && support_number === ADMIN_PASS){
         const token = jwt.sign({ id: 0, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
         return res.json({ token, user: { id: 0, dni: 'admin' } });
     }
 
     try {
         const results = await db.query(`SELECT * FROM users WHERE dni = ?`, [dni]);
-        const rows = results.toArray();
+        const rows = formatRqlite(results);
         const user = rows.length > 0 ? rows[0] : null;
 
         if (!user || !(await bcrypt.compare(support_number, user.support_number))) {
@@ -318,7 +318,7 @@ app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
         // 2. Eliminamos al usuario
         const result = await db.execute(`DELETE FROM users WHERE id = ?`, [userIdToDelete]);
 
-        if (result.rows_affected() === 0) {
+        if (result.rows_affected === 0) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
@@ -337,10 +337,8 @@ app.delete('/api/admin/users', authenticateToken, async (req, res) => {
     try {
         // Ejecutamos una secuencia de comandos para limpiar la base de datos distribuida
         // No borramos al administrador (id: 0 o dni: admin) para no perder el acceso
-        await db.execute([
-            `DELETE FROM appointments WHERE user_id != 0`,
-            `DELETE FROM users WHERE dni != 'admin'`
-        ]);
+        await db.execute(`DELETE FROM appointments WHERE user_id != 0`);
+        await db.execute(`DELETE FROM users WHERE dni != 'admin'`);
 
         res.json({ message: 'Todos los usuarios (excepto admin) han sido eliminados' });
     } catch (error) {
