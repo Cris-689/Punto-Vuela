@@ -11,7 +11,7 @@ spec:
   # El Service Headless permite que los pods se encuentren entre sí por DNS interno para formar el clúster.
   serviceName: {{ .Values.database.name }}-headless
   
-  # Definimos las 2 réplicas para garantizar la disponibilidad.
+  # Definimos las 3 réplicas para garantizar la disponibilidad.
   replicas: 3
   
   selector:

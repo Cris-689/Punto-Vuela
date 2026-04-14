@@ -7,7 +7,7 @@ if (!dbUrl) {
 }
 const client = new DataApiClient(dbUrl);
 
-// Función de ayuda para reintentar la conexión (Evita el error 503 al arrancar)
+// Función de ayuda para reintentar la conexión (Evita el error 503 al arrancar) 
 const wait = (ms) => new Promise(res => setTimeout(res, ms));
 
 const initDb = async (retries = 5) => {
