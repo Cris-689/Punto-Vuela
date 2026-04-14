@@ -212,7 +212,7 @@ button {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
-/* 📱 MOBILE RESPONSIVENESS */
+/* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
   .main-header {
     padding: 12px 16px;

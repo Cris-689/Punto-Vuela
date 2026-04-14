@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const rateLimit = require('express-rate-limit'); // IMPORTACIÓN NECESARIA
+const rateLimit = require('express-rate-limit');
 const db = require('./database');
 
 const formatRqlite = (queryData) => {
@@ -110,7 +110,7 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     let { dni, support_number } = req.body;
     
-    // Limpieza CRÍTICA: Quitamos espacios en blanco accidentales que envíe el frontend
+    // Quitamos espacios en blanco accidentales que envíe el frontend
     dni = dni ? dni.trim() : '';
     support_number = support_number ? support_number.trim() : '';
     
@@ -251,7 +251,7 @@ app.get('/api/status', async (req, res) => {
     try {
         const results = await db.query(`SELECT value FROM system_settings WHERE key = 'service_status'`);
         
-        // CORRECCIÓN: Usamos formatRqlite para leer los datos de forma segura
+        // Usamos formatRqlite para leer los datos de forma segura
         const rows = formatRqlite(results);
         const status = rows.length > 0 ? rows[0].value : 'available';
         
