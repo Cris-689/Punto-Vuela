@@ -118,8 +118,8 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
     if (ADMIN_DNI && ADMIN_PASS && dni === ADMIN_DNI && support_number === ADMIN_PASS) {
-        const token = jwt.sign({ id: 1, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
-        return res.json({ token, user: { id: 0, dni: 'admin' } });
+        const token = jwt.sign({ id: 999999, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
+        return res.json({ token, user: { id: 999999, dni: 'admin' } });
     }
 
     try {
