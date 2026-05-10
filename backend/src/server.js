@@ -118,7 +118,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
     if (ADMIN_DNI && ADMIN_PASS && dni === ADMIN_DNI && support_number === ADMIN_PASS) {
-        const token = jwt.sign({ id: 0, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
+        const token = jwt.sign({ id: 1, dni: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
         return res.json({ token, user: { id: 0, dni: 'admin' } });
     }
 
@@ -221,7 +221,7 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
 
         // INSERTAR LA CITA
         const insertRes = await db.execute(`INSERT INTO appointments (date, time, user_id) VALUES (?, ?, ?)`, [date, time, userId]);
-        res.status(201).json({ id: insertRes.lastInsertId || Math.floor(Math.random()*1000), date, time });
+        res.status(201).json({ id: insertRes.last_insert_id || Math.floor(Math.random()*1000), date, time });
 
     } catch (error) {
         if (error.message && error.message.includes('UNIQUE constraint failed')) {
